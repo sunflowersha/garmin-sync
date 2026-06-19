@@ -1,0 +1,33 @@
+name: Daily Garmin Sync
+
+on:
+  schedule:
+    - cron: '0 8 * * *'   # 10 AM South Africa time (UTC+2)
+  workflow_dispatch:        # allows manual trigger from GitHub UI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Write .env file
+        run: |
+          echo "GARMIN_EMAIL=${{ secrets.GARMIN_EMAIL }}" >> .env
+          echo "GARMIN_PASSWORD=${{ secrets.GARMIN_PASSWORD }}" >> .env
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
+          echo "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" >> .env
+
+      - name: Run sync (last 2 days)
+        run: python sync_garmin.py --days 2
