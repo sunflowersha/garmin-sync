@@ -1,0 +1,40 @@
+name: Send Training Notifications
+
+on:
+  schedule:
+    - cron: '0 5 * * *'   # 7 AM SAST daily (5 AM UTC). Sundays auto-send weekly summary.
+  workflow_dispatch:
+    inputs:
+      type:
+        description: 'Notification type'
+        required: false
+        default: 'reminder'
+        type: choice
+        options:
+          - reminder
+          - weekly
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install firebase-admin supabase python-dotenv
+
+      - name: Send notification
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            python notify.py --type ${{ github.event.inputs.type }}
+          else
+            python notify.py
+          fi

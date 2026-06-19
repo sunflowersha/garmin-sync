@@ -1,3 +1,4 @@
 garminconnect
 supabase
 python-dotenv
+firebase-admin
