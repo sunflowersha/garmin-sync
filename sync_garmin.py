@@ -10,6 +10,9 @@ Usage:
 
 import os
 import sys
+import base64
+import zipfile
+import io
 import argparse
 from datetime import date, datetime, timedelta
 from dotenv import load_dotenv
@@ -20,6 +23,7 @@ load_dotenv()
 
 GARMIN_EMAIL = os.getenv("GARMIN_EMAIL")
 GARMIN_PASSWORD = os.getenv("GARMIN_PASSWORD")
+GARMIN_TOKEN = os.getenv("GARMIN_TOKEN")   # base64 zip of token files (used in CI)
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
@@ -28,7 +32,19 @@ TOKEN_STORE = os.path.expanduser("~/.garminconnect")
 RUNNING_TYPES = {"running", "trail_running", "treadmill_running", "track_running"}
 
 
+def restore_token_from_env():
+    """Unzip base64 GARMIN_TOKEN into TOKEN_STORE (used in CI)."""
+    os.makedirs(TOKEN_STORE, exist_ok=True)
+    data = base64.b64decode(GARMIN_TOKEN)
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        zf.extractall(TOKEN_STORE)
+    print("Garmin token restored from GARMIN_TOKEN secret.")
+
+
 def get_garmin_client():
+    if GARMIN_TOKEN:
+        restore_token_from_env()
+
     client = garminconnect.Garmin(
         email=GARMIN_EMAIL,
         password=GARMIN_PASSWORD,

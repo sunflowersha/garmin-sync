@@ -25,7 +25,7 @@ jobs:
       - name: Write .env file
         run: |
           echo "GARMIN_EMAIL=${{ secrets.GARMIN_EMAIL }}" >> .env
-          echo "GARMIN_PASSWORD=${{ secrets.GARMIN_PASSWORD }}" >> .env
+          echo "GARMIN_TOKEN=${{ secrets.GARMIN_TOKEN }}" >> .env
           echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
           echo "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" >> .env
 
