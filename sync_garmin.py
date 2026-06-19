@@ -31,6 +31,15 @@ TOKEN_STORE = os.path.expanduser("~/.garminconnect")
 
 RUNNING_TYPES = {"running", "trail_running", "treadmill_running", "track_running"}
 
+# Training plan starts Monday 15 June 2026 (Week 1 of 49)
+PLAN_START = date(2026, 6, 15)
+
+def plan_week(run_date):
+    """Return plan week number (1-49) for a given date. Pre-plan dates return 1."""
+    if run_date < PLAN_START:
+        return 1
+    return min(max((run_date - PLAN_START).days // 7 + 1, 1), 49)
+
 
 def restore_token_from_env():
     """Unzip base64 GARMIN_TOKEN into TOKEN_STORE (used in CI)."""
@@ -114,7 +123,7 @@ def activity_to_run(activity):
     elev = activity.get("elevationGain")
 
     session_type = classify_session(activity)
-    week_num = run_date.isocalendar()[1]
+    week_num = plan_week(run_date)
     day_name = run_date.strftime("%a")  # Mon, Tue, etc.
 
     return {
