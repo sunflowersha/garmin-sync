@@ -35,7 +35,8 @@ RUNNING_TYPES = {"running", "trail_running", "treadmill_running", "track_running
 def restore_token_from_env():
     """Unzip base64 GARMIN_TOKEN into TOKEN_STORE (used in CI)."""
     os.makedirs(TOKEN_STORE, exist_ok=True)
-    data = base64.b64decode(GARMIN_TOKEN)
+    token = GARMIN_TOKEN.strip()
+    data = base64.b64decode(token + '=' * (-len(token) % 4))
     with zipfile.ZipFile(io.BytesIO(data)) as zf:
         zf.extractall(TOKEN_STORE)
     print("Garmin token restored from GARMIN_TOKEN secret.")
