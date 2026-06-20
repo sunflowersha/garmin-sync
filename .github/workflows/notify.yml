@@ -14,11 +14,21 @@ on:
           - reminder
           - weekly
 
+permissions:
+  contents: read
+  id-token: write   # Required for Workload Identity Federation OIDC
+
 jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/624011748994/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'firebase-adminsdk-fbsvc@pulzeiq-4669c.iam.gserviceaccount.com'
 
       - uses: actions/setup-python@v5
         with:
@@ -29,7 +39,6 @@ jobs:
 
       - name: Send notification
         env:
-          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |

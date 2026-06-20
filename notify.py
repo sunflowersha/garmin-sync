@@ -23,7 +23,6 @@ load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-FIREBASE_SA_JSON = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
 
 PLAN_START = date(2026, 6, 15)
 
@@ -115,12 +114,8 @@ def fmt_pace(secs):
 
 
 def init_firebase():
-    sa_json = FIREBASE_SA_JSON
-    if not sa_json:
-        print("ERROR: FIREBASE_SERVICE_ACCOUNT_JSON not set.")
-        sys.exit(1)
-    cred = credentials.Certificate(json.loads(sa_json))
-    firebase_admin.initialize_app(cred)
+    cred = credentials.ApplicationDefault()
+    firebase_admin.initialize_app(cred, {"projectId": "pulzeiq-4669c"})
 
 
 def get_tokens(supabase):
