@@ -2,7 +2,7 @@ name: Send Training Notifications
 
 on:
   schedule:
-    - cron: '0 5 * * *'   # 7 AM SAST daily (5 AM UTC). Sundays auto-send weekly summary.
+    - cron: '0 4 * * *'   # 6 AM SAST daily (4 AM UTC). Sundays auto-send weekly summary.
   workflow_dispatch:
     inputs:
       type:
