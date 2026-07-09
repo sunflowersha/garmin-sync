@@ -2,7 +2,10 @@ name: Send Training Notifications
 
 on:
   schedule:
-    - cron: '0 4 * * *'   # 6 AM SAST daily (4 AM UTC). Sundays auto-send weekly summary.
+    # Queued at 00:30 UTC (02:30 SAST) because GitHub cron is best-effort and
+    # often hours late; the first job step then sleeps until exactly
+    # 03:30 UTC (05:30 SAST) before sending. Sundays auto-send weekly summary.
+    - cron: '30 0 * * *'
   workflow_dispatch:
     inputs:
       type:
@@ -22,6 +25,18 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
+      - name: Wait until 03:30 UTC (05:30 SAST)
+        if: github.event_name == 'schedule'
+        run: |
+          target=$(date -u -d "today 03:30" +%s)
+          now=$(date -u +%s)
+          if [ "$now" -lt "$target" ]; then
+            echo "Sleeping $((target - now))s until 03:30 UTC (05:30 SAST)"
+            sleep $((target - now))
+          else
+            echo "Runner started after 03:30 UTC (GitHub delay) — sending immediately"
+          fi
+
       - uses: actions/checkout@v4
 
       - id: auth
