@@ -45,8 +45,10 @@ deliberate WIF decision.
 - `type` dispatch input default changes `reminder` → `''` (empty). When empty,
   run `python notify.py` with no `--type` flag so notify.py auto-detects Sunday.
   An explicit `type` still forces reminder/weekly for manual tests.
-- `schedule:` trigger (00:30 UTC queue + sleep-to-03:30) is **kept as fallback**.
-  After the sleep, it checks via the built-in `GITHUB_TOKEN` (actions:read)
+- `schedule:` trigger (00:30 UTC queue + sleep-to-03:45) is **kept as fallback**.
+  Sleeping 15 minutes past the Worker's 03:30 firing avoids a double-send race
+  with an in-flight dispatched run. After the sleep, it checks via the built-in
+  `GITHUB_TOKEN` (actions:read)
   whether a `workflow_dispatch` run of this workflow already succeeded today
   (UTC); if so it exits 0 without sending. Worker healthy → fallback is a no-op.
   Worker dead/PAT expired → late notification instead of none.
