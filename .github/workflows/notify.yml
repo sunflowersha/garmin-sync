@@ -2,63 +2,81 @@ name: Send Training Notifications
 
 on:
   schedule:
-    # Queued at 00:30 UTC (02:30 SAST) because GitHub cron is best-effort and
-    # often hours late; the first job step then sleeps until exactly
-    # 03:30 UTC (05:30 SAST) before sending. Sundays auto-send weekly summary.
+    # FALLBACK ONLY. The primary trigger is a Cloudflare Worker cron
+    # (worker/) that dispatches this workflow at 03:30 UTC (05:30 SAST).
+    # GitHub schedule crons start hours late, so this queues early, sleeps
+    # to 03:45 UTC, then skips itself if a dispatched run already happened.
     - cron: '30 0 * * *'
   workflow_dispatch:
     inputs:
       type:
-        description: 'Notification type'
+        description: 'Notification type (empty = auto: weekly on Sundays, else reminder)'
         required: false
-        default: 'reminder'
-        type: choice
-        options:
-          - reminder
-          - weekly
+        default: ''
+        type: string
 
 permissions:
   contents: read
   id-token: write   # Required for Workload Identity Federation OIDC
+  actions: read     # Fallback guard lists today's runs
 
 jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Wait until 03:30 UTC (05:30 SAST)
+      - name: Wait until 03:45 UTC (05:45 SAST)
         if: github.event_name == 'schedule'
         run: |
-          target=$(date -u -d "today 03:30" +%s)
+          target=$(date -u -d "today 03:45" +%s)
           now=$(date -u +%s)
           if [ "$now" -lt "$target" ]; then
-            echo "Sleeping $((target - now))s until 03:30 UTC (05:30 SAST)"
+            echo "Sleeping $((target - now))s until 03:45 UTC (05:45 SAST)"
             sleep $((target - now))
           else
-            echo "Runner started after 03:30 UTC (GitHub delay) — sending immediately"
+            echo "Runner started after 03:45 UTC (GitHub delay) — continuing immediately"
           fi
 
+      - name: Skip if the Worker-dispatched run already handled today
+        if: github.event_name == 'schedule'
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          today=$(date -u +%Y-%m-%d)
+          n=$(gh run list -R "${{ github.repository }}" --workflow notify.yml \
+                --event workflow_dispatch --created ">=$today" \
+                --json status,conclusion \
+                --jq '[.[] | select(.conclusion == "success" or .status == "in_progress" or .status == "queued")] | length')
+          echo "Found $n dispatched run(s) today"
+          echo "already_sent=$([ "$n" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
+        if: steps.guard.outputs.already_sent != 'true'
 
       - id: auth
+        if: steps.guard.outputs.already_sent != 'true'
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: 'projects/624011748994/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
           service_account: 'firebase-adminsdk-fbsvc@pulzeiq-4669c.iam.gserviceaccount.com'
 
       - uses: actions/setup-python@v5
+        if: steps.guard.outputs.already_sent != 'true'
         with:
           python-version: '3.12'
 
       - name: Install dependencies
+        if: steps.guard.outputs.already_sent != 'true'
         run: pip install firebase-admin supabase python-dotenv
 
       - name: Send notification
+        if: steps.guard.outputs.already_sent != 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            python notify.py --type ${{ github.event.inputs.type }}
+          if [ -n "${{ github.event.inputs.type }}" ]; then
+            python notify.py --type "${{ github.event.inputs.type }}"
           else
             python notify.py
           fi
