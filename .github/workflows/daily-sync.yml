@@ -5,6 +5,10 @@ on:
     - cron: '0 8 * * *'   # 10 AM South Africa time (UTC+2)
   workflow_dispatch:        # allows manual trigger from GitHub UI
 
+permissions:
+  contents: read
+  id-token: write   # WIF auth for the failure push alert
+
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -29,5 +33,25 @@ jobs:
           echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
           echo "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" >> .env
 
-      - name: Run sync (last 2 days)
-        run: python sync_garmin.py --days 2
+      - name: Run sync (last 7 days)
+        # 7-day lookback: a multi-day outage no longer drops runs (inserts are deduped)
+        run: python sync_garmin.py --days 7
+
+      # Failure alert: push "sync failed" to the phone via the same FCM
+      # pipeline notify.yml uses. Sync failures went unnoticed for 6 days
+      # in July 2026 — never let that happen silently again.
+      - id: auth-alert
+        if: failure()
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/624011748994/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'firebase-adminsdk-fbsvc@pulzeiq-4669c.iam.gserviceaccount.com'
+
+      - name: Push alert on failure
+        if: failure()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          pip install firebase-admin supabase python-dotenv
+          python notify.py --alert "Garmin sync FAILED today — recent runs may be missing from the app. Check GitHub Actions in garmin-sync."

@@ -65,5 +65,24 @@ class CountTests(unittest.TestCase):
         self.assertEqual(sent, 1)
 
 
+class AlertTests(unittest.TestCase):
+    def test_alert_sends_text_to_all_tokens(self):
+        supabase = mock.MagicMock()
+        calls = []
+        with mock.patch.object(notify, "get_tokens", return_value=["a", "b"]), \
+             mock.patch.object(notify, "send",
+                               side_effect=lambda s, t, title, body: calls.append((t, title, body)) or True):
+            sent = notify.send_alert(supabase, "Garmin sync failed")
+        self.assertEqual(sent, 2)
+        self.assertEqual(calls[0][2], "Garmin sync failed")
+        self.assertIn("alert", calls[0][1].lower())
+
+    def test_alert_returns_zero_without_tokens(self):
+        supabase = mock.MagicMock()
+        with mock.patch.object(notify, "get_tokens", return_value=[]):
+            sent = notify.send_alert(supabase, "boom")
+        self.assertEqual(sent, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

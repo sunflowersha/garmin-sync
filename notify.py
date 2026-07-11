@@ -143,10 +143,31 @@ def send_weekly_summary(supabase, plan):
     return sum(1 for token in tokens if send(supabase, token, title, body))
 
 
+def send_alert(supabase, text):
+    """Ops alert (e.g. 'Garmin sync failed') — needs no plan data."""
+    print(f"\nAlert: {text}")
+    tokens = get_tokens(supabase)
+    if not tokens:
+        print("No FCM tokens registered.")
+        return 0
+    return sum(1 for token in tokens
+               if send(supabase, token, "⚠️ Training app alert", text))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--type", choices=["reminder", "weekly"], default=None)
+    parser.add_argument("--alert", default=None,
+                        help="Send this text as an ops alert to all devices (skips the plan)")
     args = parser.parse_args()
+
+    if args.alert:
+        init_firebase()
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        if send_alert(supabase, args.alert) == 0:
+            print("FATAL: no notification was delivered to any device")
+            sys.exit(1)
+        return
 
     # Auto-detect Sunday for weekly summary if no --type given
     notify_type = args.type
