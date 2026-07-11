@@ -1,0 +1,14 @@
+# Fires at 03:30 UTC (05:30 SAST — SA has no DST) and dispatches the
+# notify.yml workflow in sunflowersha/garmin-sync. GitHub's own schedule
+# crons start hours late; workflow_dispatch runs start in seconds.
+#
+# Secret GH_TOKEN: fine-grained PAT, repo sunflowersha/garmin-sync only,
+# permission Actions: read+write. EXPIRES 2027-07-11 — renew before then
+# (github.com/settings/personal-access-tokens), then:
+#   npx wrangler secret put GH_TOKEN
+name = "comrades-notify-trigger"
+main = "worker.js"
+compatibility_date = "2026-07-11"
+
+[triggers]
+crons = ["30 3 * * *"]
