@@ -23,7 +23,7 @@ from datetime import date
 from dotenv import load_dotenv
 
 import firebase_admin
-from firebase_admin import credentials, messaging
+from firebase_admin import credentials, messaging, exceptions
 from supabase import create_client
 
 load_dotenv()
@@ -71,15 +71,21 @@ def get_tokens(supabase):
     return [row["token"] for row in result.data] if result.data else []
 
 
-def send(token, title, body):
+def send(supabase, token, title, body):
     msg = messaging.Message(
         notification=messaging.Notification(title=title, body=body),
+        webpush=messaging.WebpushConfig(headers={"Urgency": "high"}),
         token=token,
     )
     try:
         messaging.send(msg)
         print(f"  Sent to token ...{token[-8:]}")
         return True
+    except (messaging.UnregisteredError, exceptions.InvalidArgumentError) as e:
+        # Dead or malformed token: purge it so it can't silently absorb sends.
+        print(f"  DEAD token ...{token[-8:]} ({e}) — deleting from fcm_tokens")
+        supabase.table("fcm_tokens").delete().eq("token", token).execute()
+        return False
     except Exception as e:
         print(f"  FAILED for ...{token[-8:]}: {e}")
         return False
@@ -104,9 +110,8 @@ def send_daily_reminder(supabase, plan):
     tokens = get_tokens(supabase)
     if not tokens:
         print("No FCM tokens registered.")
-        return
-    for token in tokens:
-        send(token, title, body)
+        return 0
+    return sum(1 for token in tokens if send(supabase, token, title, body))
 
 
 def send_weekly_summary(supabase, plan):
@@ -134,9 +139,8 @@ def send_weekly_summary(supabase, plan):
     tokens = get_tokens(supabase)
     if not tokens:
         print("No FCM tokens registered.")
-        return
-    for token in tokens:
-        send(token, title, body)
+        return 0
+    return sum(1 for token in tokens if send(supabase, token, title, body))
 
 
 def main():
@@ -154,9 +158,13 @@ def main():
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
     if notify_type == "reminder":
-        send_daily_reminder(supabase, plan)
+        sent = send_daily_reminder(supabase, plan)
     else:
-        send_weekly_summary(supabase, plan)
+        sent = send_weekly_summary(supabase, plan)
+
+    if sent == 0:
+        print("FATAL: no notification was delivered to any device")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
