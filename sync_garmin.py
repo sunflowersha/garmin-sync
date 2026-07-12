@@ -31,14 +31,14 @@ TOKEN_STORE = os.path.expanduser("~/.garminconnect")
 
 RUNNING_TYPES = {"running", "trail_running", "treadmill_running", "track_running"}
 
-# Training plan starts Monday 15 June 2026 (Week 1 of 49)
+# Training plan starts Monday 15 June 2026 (Week 1 of 52 — Comrades is Sun 13 Jun 2027, W52)
 PLAN_START = date(2026, 6, 15)
 
 def plan_week(run_date):
-    """Return plan week number (1-49) for a given date. Pre-plan dates return 1."""
+    """Return plan week number (1-52) for a given date. Pre-plan dates return 1."""
     if run_date < PLAN_START:
         return 1
-    return min(max((run_date - PLAN_START).days // 7 + 1, 1), 49)
+    return min(max((run_date - PLAN_START).days // 7 + 1, 1), 52)
 
 
 def restore_token_from_env():
