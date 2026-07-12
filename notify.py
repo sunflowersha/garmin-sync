@@ -30,7 +30,7 @@ load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-PLAN_URL = os.getenv("PLAN_URL", "https://shasub10comrades.netlify.app/plan.json")
+PLAN_URL = os.getenv("PLAN_URL", "https://shasub1030comrades.netlify.app/plan.json")
 
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 

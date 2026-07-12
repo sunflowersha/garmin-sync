@@ -6,7 +6,7 @@ notifications for the training plan.
 
 ## Files
 - `sync_garmin.py` — pulls runs from Garmin Connect into Supabase (`runs` table); GitHub Actions `daily-sync.yml`, 10:00 SAST, 7-day lookback (deduped). On failure it pushes an FCM alert to the phone (`notify.py --alert "..."`)
-- `notify.py` — sends FCM push notifications; fetches the plan from https://shasub10comrades.netlify.app/plan.json at runtime (NO embedded plan data — the app repo is the single source of truth)
+- `notify.py` — sends FCM push notifications; fetches the plan from https://shasub1030comrades.netlify.app/plan.json at runtime (NO embedded plan data — the app repo is the single source of truth)
 - `worker/` — Cloudflare Worker `comrades-notify-trigger` (the notification scheduler, see below)
 - `tests/test_notify.py` — unit tests, all network mocked; run `python -m unittest tests.test_notify` before every push
 - `.github/workflows/notify.yml` — sends the notification (dispatch target + fallback)
