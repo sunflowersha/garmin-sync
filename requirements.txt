@@ -1,4 +1,5 @@
-garminconnect
+garminconnect==0.3.6
 supabase
 python-dotenv
 firebase-admin
+cryptography

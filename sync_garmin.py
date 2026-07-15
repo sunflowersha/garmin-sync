@@ -14,7 +14,8 @@ import base64
 import zipfile
 import io
 import argparse
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+from cryptography.fernet import Fernet
 from dotenv import load_dotenv
 import garminconnect
 from supabase import create_client
@@ -23,11 +24,13 @@ load_dotenv()
 
 GARMIN_EMAIL = os.getenv("GARMIN_EMAIL")
 GARMIN_PASSWORD = os.getenv("GARMIN_PASSWORD")
-GARMIN_TOKEN = os.getenv("GARMIN_TOKEN")   # base64 zip of token files (used in CI)
+GARMIN_TOKEN = os.getenv("GARMIN_TOKEN")   # base64 zip of token files (bootstrap fallback)
+GARMIN_TOKEN_KEY = os.getenv("GARMIN_TOKEN_KEY")  # Fernet key for the Supabase-persisted token
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 TOKEN_STORE = os.path.expanduser("~/.garminconnect")
+TOKEN_FILE = os.path.join(TOKEN_STORE, "garmin_tokens.json")
 
 RUNNING_TYPES = {"running", "trail_running", "treadmill_running", "track_running"}
 
@@ -42,17 +45,57 @@ def plan_week(run_date):
 
 
 def restore_token_from_env():
-    """Unzip base64 GARMIN_TOKEN into TOKEN_STORE (used in CI)."""
+    """Unzip base64 GARMIN_TOKEN into TOKEN_STORE (bootstrap fallback)."""
     os.makedirs(TOKEN_STORE, exist_ok=True)
-    token = GARMIN_TOKEN.strip()
+    token = GARMIN_TOKEN.lstrip("﻿").strip()  # BOM guard: PS pipes can prepend one
     data = base64.b64decode(token + '=' * (-len(token) % 4))
     with zipfile.ZipFile(io.BytesIO(data)) as zf:
         zf.extractall(TOKEN_STORE)
     print("Garmin token restored from GARMIN_TOKEN secret.")
 
 
-def get_garmin_client():
-    if GARMIN_TOKEN:
+def restore_token_from_supabase(supabase):
+    """Load the latest encrypted token from garmin_state into TOKEN_STORE.
+
+    Garmin rotates DI tokens every few days, so a token frozen in a GitHub
+    secret goes stale; garmin_state always holds the newest one.
+    """
+    if not GARMIN_TOKEN_KEY:
+        return False
+    try:
+        res = supabase.table("garmin_state").select("token_enc").eq("id", 1).execute()
+        if not res.data:
+            return False
+        raw = Fernet(GARMIN_TOKEN_KEY).decrypt(res.data[0]["token_enc"].encode())
+        os.makedirs(TOKEN_STORE, exist_ok=True)
+        with open(TOKEN_FILE, "wb") as f:
+            f.write(raw)
+        print("Garmin token restored from Supabase.")
+        return True
+    except Exception as e:
+        print(f"Could not restore token from Supabase: {e}")
+        return False
+
+
+def persist_token_to_supabase(supabase):
+    """Encrypt the (possibly refreshed) token store back to garmin_state."""
+    if not GARMIN_TOKEN_KEY or not os.path.exists(TOKEN_FILE):
+        return
+    try:
+        with open(TOKEN_FILE, "rb") as f:
+            enc = Fernet(GARMIN_TOKEN_KEY).encrypt(f.read()).decode()
+        supabase.table("garmin_state").upsert({
+            "id": 1,
+            "token_enc": enc,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }).execute()
+        print("Garmin token persisted to Supabase.")
+    except Exception as e:
+        print(f"WARNING: could not persist token to Supabase: {e}")
+
+
+def get_garmin_client(supabase):
+    if not restore_token_from_supabase(supabase) and GARMIN_TOKEN:
         restore_token_from_env()
 
     client = garminconnect.Garmin(
@@ -65,10 +108,14 @@ def get_garmin_client():
         client.login(TOKEN_STORE)
         print("Resumed Garmin session from token cache.")
     except Exception:
-        print("Logging in to Garmin Connect...")
-        client.login()
-        client.garth.dump(TOKEN_STORE)
+        print("Cached token rejected — logging in with credentials...")
+        if os.path.exists(TOKEN_FILE):
+            os.remove(TOKEN_FILE)
+        # With no cached token, login() falls through to a credential login
+        # and auto-dumps the fresh token store to TOKEN_STORE.
+        client.login(TOKEN_STORE)
         print("Login successful. Tokens saved.")
+    persist_token_to_supabase(supabase)
     return client
 
 
@@ -143,8 +190,8 @@ def activity_to_run(activity):
 
 
 def sync(days=7, target_date=None):
-    garmin = get_garmin_client()
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    garmin = get_garmin_client(supabase)
 
     if target_date:
         start = target_date
