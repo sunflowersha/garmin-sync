@@ -44,6 +44,17 @@ Cloudflare Worker cron 03:30 UTC (05:30 SAST, SA has no DST)
 - Firebase auth in Actions is Workload Identity Federation (no key files) —
   do not replace with a service-account key.
 - `SUPABASE_URL` / `SUPABASE_KEY`: GitHub repo secrets.
+- **Garmin auth (since 2026-07-15):** Garmin rotates DI tokens every few
+  days, so a token frozen in a GitHub secret dies (sync was red 13–15 Jul).
+  The live token is a Fernet-encrypted blob in Supabase `garmin_state`
+  (single row, anon-RLS ok because it's ciphertext); every sync run restores
+  it and persists the refreshed one back. `GARMIN_TOKEN_KEY` (GitHub secret +
+  local `.env`) is the Fernet key — static, never rotates. `GARMIN_TOKEN`
+  (base64 zip of `garmin_tokens.json`) is bootstrap fallback only. If auth
+  ever fully breaks: mint a fresh token locally (credential login works from
+  a residential IP; Garmin 429s some login strategies — later ones succeed),
+  then re-bootstrap `garmin_state`. `garminconnect` is pinned (0.3.6) —
+  its login/token API churns with Garmin's auth changes.
 - `worker/.dev.vars` (gitignored): local copy of GH_TOKEN for
   `wrangler dev --test-scheduled`.
 
